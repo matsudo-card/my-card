@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>デジタル会員証</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 20px; background: #f5f5f5; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+        h1 { font-size: 18px; color: #333; margin-bottom: 20px; }
+        button { background: #06C755; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
+        button.reset { background: #999; font-size: 12px; padding: 6px 12px; width: auto; }
+        #barcode-area { font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 4px; padding: 20px; background: #eee; margin: 15px 0; border-radius: 6px; }
+        #status { margin: 15px 0; font-weight: bold; color: #666; }
+        
+        /* 【回避策2】手入力エリアのデザインを追加 */
+        .manual-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
+        .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
+        .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
+        .sub-btn { background: #333; font-size: 14px; padding: 8px 16px; width: auto; margin-top: 8px; }
+        
+        /* 【回避策3】バーコード描画用SVGのサイズ制限 */
+        #barcode { width: 100%; max-width: 320px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1 id="title">会員証を登録する</h1>
+    <div id="setup-area">
+        <p id="status">LINEの仕組みを読み込み中...</p>
+        <button id="start-btn" style="display:none;" onclick="startCamera()">📷 カメラを起動する</button>
+        
+        <!-- 【回避策2】カメラがダメな時用の手入力フォームを標準装備 -->
+        <div id="manual-box" class="manual-area" style="display:none;">
+            <p>※カメラでうまくスキャンできない場合</p>
+            <input type="tel" id="jan-input" class="input-box" maxlength="13" placeholder="13桁の番号を入力">
+            <button class="sub-btn" onclick="saveManualCode()">番号で登録する</button>
+        </div>
+    </div>
+    
+    <div id="display-area" style="display:none;">
+        <!-- 【回避策3】お店のレジでスキャンできる本物のバーコードを描画する土台（SVG）に変形 -->
+        <svg id="barcode"></svg>
+        <div id="barcode-area" style="display:none;"></div>
+        <p style="margin-top:20px;"><button class="reset" onclick="resetData()">カードの再登録（変更）</button></p>
+    </div>
+</div>
+
+<script>
+// GitHubのエラーを完全に回避するため、2つのプログラムを文字（動的）として安全に生成します
+var scriptLINE = document.createElement('script');
+scriptLINE.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
+document.head.appendChild(scriptLINE);
+
+var scriptBARCODE = document.createElement('script');
+scriptBARCODE.src = "https://jsdelivr.net";
+document.head.appendChild(scriptBARCODE);
+
+var STORAGE_KEY = 'user_jan_code';
+
+window.onload = function() {
+    var savedCode = localStorage.getItem(STORAGE_KEY);
+    if (savedCode) {
+        showBarcode(savedCode);
+        return;
+    }
+
+    // LINEシステムの初期化
+    setTimeout(function() {
+        if (typeof liff !== 'undefined') {
+            liff.init({
+                liffId: "2011004612-uxmN3BJ4"
+            }).then(function() {
+                document.getElementById('status').innerText = '「カメラを起動」を押し、カードのJANコード（13桁）を枠内に映してください。';
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('manual-box').style.display = 'block'; // 手入力枠を表示
+            }).catch(function(err) {
+                document.getElementById('status').innerText = 'LINEアプリ内からメニューを開いてください。';
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('manual-box').style.display = 'block';
+            });
+        } else {
+            document.getElementById('status').innerText = 'システムエラーが発生しました。再度お試しください。';
+        }
+    }, 1200); // 読み込みの衝突を防ぐため、少し長めの安全な猶予を持たせます
+};
+
+// 【回避策1】カメラ起動・読取処理（条件をマイルドに緩和した安定版）
+function startCamera() {
+    try {
+        if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('status').innerText = 'LINE公式カメラを起動中...';
+
+            liff.scanCodeV2().then(function(result) {
+                var code = result.value;
+                // スペースやゴミ文字を自動排除
+                code = code.replace(/\s+/g, '');
+
+                // 「数字だけ」であれば桁数に関わらず強制的に受け入れる（判定の緩和）
+                if (/^\d+$/.test(code)) {
+                    localStorage.setItem(STORAGE_KEY, code);
+                    showBarcode(code);
+                } else {
+                    alert('バーコードの数字が正しく読み取れませんでした。もう一度お試しください。');
+                    location.reload();
+                }
+            }).catch(function(err) {
+                document.getElementById('status').innerText = 'キャンセルまたはエラー: ' + err.message;
+                document.getElementById('start-btn').style.display = 'block';
+            });
+        } else {
+            alert('このカメラ機能はLINEアプリ内でのみ動作します。LINE公式アカウントのトーク画面（リッチメニューなど）から起動してください。');
+        }
+    } catch(e) {
+        alert('エラーが発生しました: ' + e.message);
+    }
+}
+
+// 【回避策2】数字を入力して登録ボタンを押したときの処理
+function saveManualCode() {
+    var inputVal = document.getElementById('jan-input').value;
+    inputVal = inputVal.replace(/\s+/g, ''); // 空白を削除
+    
+    // 数字が1文字以上入力されていれば登録可能にする
+    if (/^\d+$/.test(inputVal) && inputVal.length > 0) {
+        localStorage.setItem(STORAGE_KEY, inputVal);
+        showBarcode(inputVal);
+    } else {
+        alert('エラー：半角数字を正しく入力してください。');
+    }
+}
+
+// 【回避策3】2回目以降：本物の縦線バーコードを自動生成して表示する処理
+function showBarcode(code) {
+    document.getElementById('title').innerText = 'あなたの会員証';
+    document.getElementById('setup-area').style.display = 'none';
+    document.getElementById('display-area').style.display = 'block';
+    
+    // 描画ライブラリの読み込み完了を少し待ってから実行
+    setTimeout(function() {
+        if (typeof JsBarcode !== 'undefined') {
+            try {
+                // 13桁の場合は標準のEAN13（JAN形式）、それ以外の桁ズレ時はCODE128形式で美しく縦線を描画
+                var barcodeFormat = (code.length === 13) ? "EAN13" : "CODE128";
+                
+                JsBarcode("#barcode", code, {
+                    format: barcodeFormat,
+                    width: 2.3,
+                    height: 100,
+                    displayValue: true, // バーコードの下に数字も大きく表示
+                    fontSize: 18,
+                    background: "#ffffff"
+                });
+            } catch(e) {
+                // 万が一描画エラーが起きた場合は元々の「数字表示モード」を安全網として起動
+                document.getElementById('barcode-area').style.display = 'block';
+                document.getElementById('barcode-area').innerText = code;
+            }
+        } else {
+            // ライブラリが完全にブロックされた場合も数字表示
+            document.getElementById('barcode-area').style.display = 'block';
+            document.getElementById('barcode-area').innerText = code;
+        }
+    }, 300);
+}
+
+function resetData() {
+    if(confirm('登録している会員証データを削除して再登録しますか？')) {
+        localStorage.removeItem(STORAGE_KEY);
+        location.reload();
+    }
+}
+</script>
+
+</body>
+</html>
