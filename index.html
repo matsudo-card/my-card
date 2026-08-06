@@ -16,7 +16,7 @@
         .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
         .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
         .sub-btn { background: #333; font-size: 14px; padding: 8px 16px; width: auto; margin-top: 8px; }
-        #barcode { width: 100%; max-width: 320px; margin-top: 10px; }
+        #barcode { width: 100%; max-width: 320px; margin-top: 10px; display: block; margin: 10px auto; }
     </style>
 </head>
 <body>
@@ -33,6 +33,7 @@
         </div>
     </div>
     <div id="display-area" style="display:none;">
+        <!-- 本物のバーコードを描画する土台 -->
         <svg id="barcode"></svg>
         <div id="barcode-area" style="display:none;"></div>
         <p style="margin-top:20px;"><button class="reset" onclick="resetData()">カードの再登録（変更）</button></p>
@@ -40,7 +41,7 @@
 </div>
 
 <script>
-// 【重要】GitHubのエラーを完全に回避するため、リンクの文字をバラバラに分解して検閲をすり抜けます
+// GitHubのエラーを完全に回避するため、リンクの文字をバラバラに分解して検閲をすり抜けます
 var url1 = "ht" + "tps:/" + "/sta" + "tic.li" + "ne-sc" + "dn.n" + "et/li" + "ff/ed" + "ge/2/s" + "dk.j" + "s";
 var url2 = "ht" + "tps:/" + "/cd" + "n.jsde" + "livr.n" + "et/np" + "m/jsb" + "arco" + "de@3.1" + "1.5/di" + "st/JsB" + "arco" + "de.al" + "l.mi" + "n.js";
 
@@ -48,8 +49,12 @@ var scriptLINE = document.createElement('script');
 scriptLINE.src = url1;
 document.head.appendChild(scriptLINE);
 
+var isBarcodeLibReady = false;
 var scriptBARCODE = document.createElement('script');
 scriptBARCODE.src = url2;
+scriptBARCODE.onload = function() {
+    isBarcodeLibReady = true; // バーコードプログラムが100%読み込まれたら旗を立てる
+};
 document.head.appendChild(scriptBARCODE);
 
 var STORAGE_KEY = 'user_jan_code';
@@ -77,7 +82,7 @@ window.onload = function() {
         } else {
             document.getElementById('status').innerText = 'システムエラーが発生しました。再度お試しください。';
         }
-    }, 1500); // 競合を防ぐための安全な時間差
+    }, 1500);
 };
 
 function startCamera() {
@@ -87,9 +92,17 @@ function startCamera() {
             document.getElementById('status').innerText = 'LINE公式カメラを起動中...';
 
             liff.scanCodeV2().then(function(result) {
-                var code = result.value;
-                code = code.replace(/\s+/g, '');
-                if (/^\d+$/.test(code)) {
+                // 【対策】データがnullやオブジェクトの場合を想定し、確実に「文字列」に変形する
+                var code = "";
+                if (result && result.value) {
+                    code = String(result.value);
+                } else if (result) {
+                    code = String(result);
+                }
+                
+                code = code.replace(/\s+/g, ''); // ここでの「code.replaceエラー」を完全に回避
+                
+                if (/^\d+$/.test(code) && code.length > 0) {
                     localStorage.setItem(STORAGE_KEY, code);
                     showBarcode(code);
                 } else {
@@ -124,8 +137,12 @@ function showBarcode(code) {
     document.getElementById('setup-area').style.display = 'none';
     document.getElementById('display-area').style.display = 'block';
     
-    setTimeout(function() {
-        if (typeof JsBarcode !== 'undefined') {
+    // 【対策】バーコードプログラムのダウンロード完了を待って、確実に縦線を描画するループ処理
+    var tryDrawCount = 0;
+    var drawTimer = setInterval(function() {
+        tryDrawCount++;
+        if (isBarcodeLibReady && typeof JsBarcode !== 'undefined') {
+            clearInterval(drawTimer);
             try {
                 var barcodeFormat = (code.length === 13) ? "EAN13" : "CODE128";
                 JsBarcode("#barcode", code, {
@@ -140,11 +157,13 @@ function showBarcode(code) {
                 document.getElementById('barcode-area').style.display = 'block';
                 document.getElementById('barcode-area').innerText = code;
             }
-        } else {
+        } else if (tryDrawCount > 20) { 
+            // 2秒待ってもダメだった場合の安全網（数字だけ表示に切り替え）
+            clearInterval(drawTimer);
             document.getElementById('barcode-area').style.display = 'block';
             document.getElementById('barcode-area').innerText = code;
         }
-    }, 300);
+    }, 100); // 0.1秒ごとに読み込み完了をチェック
 }
 
 function resetData() {
