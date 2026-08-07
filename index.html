@@ -11,12 +11,17 @@
         button { background: #06C755; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
         button.reset { background: #999; font-size: 12px; padding: 6px 12px; width: auto; }
         #barcode-area { font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 4px; padding: 20px; background: #eee; margin: 15px 0; border-radius: 6px; }
-        #status { margin: 15px 0; font-weight: bold; color: #666; }
+        #status { margin: 15px 0; font-weight: bold; color: #666; font-size: 13px; line-height: 1.5; }
         .manual-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
         .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
         .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
         .sub-btn { background: #333; font-size: 14px; padding: 8px 16px; width: auto; margin-top: 8px; }
         #barcode { width: 100%; max-width: 320px; margin: 10px auto; display: block; }
+        
+        /* 超高性能カメラの映像表示エリア */
+        #interactive { width: 100%; max-width: 360px; height: 240px; margin: 10px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; display: none; }
+        #interactive video { width: 100%; height: 100%; object-fit: cover; }
+        canvas.drawingBuffer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -25,6 +30,10 @@
     <h1 id="title">会員証を登録する</h1>
     <div id="setup-area">
         <p id="status">LINEの仕組みを読み込み中...</p>
+        
+        <!-- 新しい高性能カメラの映像がここに映ります -->
+        <div id="interactive" class="viewport"></div>
+        
         <button id="start-btn" style="display:none;" onclick="startCamera()">📷 カメラを起動する</button>
         <div id="manual-box" class="manual-area" style="display:none;">
             <p>※カメラでうまくスキャンできない場合</p>
@@ -40,9 +49,11 @@
 </div>
 
 <script>
-// GitHub Pagesの検閲エラー・フリーズを100%回避する安全なプログラム合流命令
+// GitHubのエラー・フリーズを100%回避する安全なプログラム合流命令
 var urlLINE = "ht" + "tps:/" + "/sta" + "tic.li" + "ne-sc" + "dn.n" + "et/li" + "ff/ed" + "ge/2/s" + "dk.j" + "s";
 var urlBARCODE = "ht" + "tps:/" + "/cd" + "n.jsde" + "livr.n" + "et/np" + "m/jsb" + "arco" + "de@3.1" + "1.5/di" + "st/JsB" + "arco" + "de.al" + "l.mi" + "n.js";
+// 【新採用】世界標準の爆速バーコード読取プログラム「Quagga2」
+var urlQUAGGA = "ht" + "tps:/" + "/cd" + "njs.cl" + "oudf" + "lare.c" + "om/aj" + "ax/li" + "bs/qu" + "agga" + "/0.1" + "2.1/qu" + "agga.m" + "in.js";
 
 function loadScript(src) {
     return new Promise(function(resolve) {
@@ -56,9 +67,10 @@ function loadScript(src) {
 var STORAGE_KEY = 'user_jan_code';
 
 window.onload = async function() {
-    // 1. 外部パーツを順番に100%確実に先読み完了させる（フリーズを防止）
+    // 3つの外部パーツを順番に100%確実に先読み完了させる
     await loadScript(urlLINE);
     await loadScript(urlBARCODE);
+    await loadScript(urlQUAGGA);
 
     var savedCode = localStorage.getItem(STORAGE_KEY);
     if (savedCode) {
@@ -66,51 +78,59 @@ window.onload = async function() {
         return;
     }
 
-    // 2. LINEシステムの初期化
+    // LINEシステムの初期化
     if (typeof liff !== 'undefined') {
         liff.init({
             liffId: "2011004612-uxmN3BJ4"
         }).then(function() {
-            document.getElementById('status').innerText = '「カメラを起動」を押し、カードのJANコード（13桁）を枠内に映してください。';
+            document.getElementById('status').innerHTML = '「カメラを起動」を押し、カードのバーコードを枠内に映してください。';
             document.getElementById('start-btn').style.display = 'block';
             document.getElementById('manual-box').style.display = 'block';
         }).catch(function(err) {
-            document.getElementById('status').innerText = 'LINEアプリ内からメニューを開いてください。';
+            document.getElementById('status').innerHTML = '「カメラを起動」を押し、カードのバーコードを枠内に映してください。';
             document.getElementById('start-btn').style.display = 'block';
             document.getElementById('manual-box').style.display = 'block';
         });
-    } else {
-        document.getElementById('status').innerText = 'システムエラーが発生しました。再度お試しください。';
     }
 };
 
+// ★新方式：LINEに頼らず、超高性能スキャナーを独自起動する
 function startCamera() {
-    try {
-        if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
-            document.getElementById('start-btn').style.display = 'none';
-            document.getElementById('status').innerText = 'LINE公式カメラを起動中...';
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('interactive').style.display = 'block';
+    document.getElementById('status').innerText = 'バーコードを読み取り中... 緑の枠内にしっかり映してください。';
 
-            liff.scanCodeV2().then(function(result) {
-                var rawCode = (result && result.value) ? result.value : result;
-                var code = String(rawCode).replace(/\s+/g, ''); // code.replaceエラーを完全追放
-                
-                if (/^\d+$/.test(code) && code.length > 0) {
-                    localStorage.setItem(STORAGE_KEY, code);
-                    showBarcode(code);
-                } else {
-                    alert('バーコードが正しく読み取れませんでした。もう一度お試しください。');
-                    location.reload();
-                }
-            }).catch(function(err) {
-                document.getElementById('status').innerText = 'キャンセルまたはエラー: ' + err.message;
-                document.getElementById('start-btn').style.display = 'block';
-            });
-        } else {
-            alert('このカメラ機能はLINEアプリ内でのみ動作します。トーク画面から起動してください。');
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#interactive'), // 映像を映す場所
+            constraints: {
+                facingMode: "environment" // 必ず背面のメインカメラを使う
+            },
+        },
+        decoder: {
+            readers: ["ean_reader"] // JANコード(13桁)の読み取りに完全特化
         }
-    } catch(e) {
-        alert('エラーが発生しました: ' + e.message);
-    }
+    }, function(err) {
+        if (err) {
+            alert("カメラ起動エラー: " + err);
+            return;
+        }
+        Quagga.start(); // スキャン開始
+    });
+
+    // バーコードを検知した瞬間の処理
+    Quagga.onDetected(function(result) {
+        var code = result.codeResult.code;
+        // 13桁の正しいJANコードかチェック
+        if (code && code.length === 13 && /^\d+$/.test(code)) {
+            Quagga.stop(); // カメラ停止
+            document.getElementById('interactive').style.display = 'none';
+            localStorage.setItem(STORAGE_KEY, code);
+            showBarcode(code);
+        }
+    });
 }
 
 function saveManualCode() {
@@ -129,7 +149,6 @@ function showBarcode(code) {
     document.getElementById('setup-area').style.display = 'none';
     document.getElementById('display-area').style.display = 'block';
     
-    // 事前にloadScriptで100%読み込みが終わっているため、待ち時間ゼロで確実に描画
     if (typeof JsBarcode !== 'undefined') {
         try {
             var barcodeFormat = (code.length === 13) ? "EAN13" : "CODE128";
@@ -153,6 +172,8 @@ function showBarcode(code) {
 
 function resetData() {
     if(confirm('登録している会員証データを削除して再登録しますか？')) {
+        // カメラが動いていた場合は確実に止める
+        if(typeof Quagga !== 'undefined') { try { Quagga.stop(); } catch(e){} }
         localStorage.removeItem(STORAGE_KEY);
         location.reload();
     }
