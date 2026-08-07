@@ -11,6 +11,11 @@
         button { background: #06C755; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
         button.reset { background: #999; font-size: 12px; padding: 6px 12px; width: auto; }
         #status { margin: 15px 0; font-weight: bold; color: #666; font-size: 13px; line-height: 1.5; }
+        
+        /* 【追加】利用規約・ポリシーリンクの文字デザイン */
+        .policy-links { margin-top: 15px; font-size: 12px; color: #888; line-height: 1.6; }
+        .policy-links a { color: #06C755; text-decoration: underline; font-weight: bold; }
+        
         .manual-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
         .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
         .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
@@ -18,7 +23,6 @@
         #interactive { width: 100%; max-width: 360px; height: 200px; margin: 10px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; display: none; border: 3px solid #06C755; }
         #interactive video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* バーコード台座 */
         .barcode-container { background: #ffffff; padding: 25px 15px; border-radius: 8px; border: 1px solid #ddd; margin: 15px 0; display: inline-block; width: 100%; box-sizing: border-box; }
         #barcode { width: 100%; max-width: 340px; height: auto; display: block; margin: 0 auto; }
     </style>
@@ -31,6 +35,12 @@
         <p id="status">LINEの仕組みを読み込み中...</p>
         <div id="interactive" class="viewport"></div>
         <button id="start-btn" style="display:none;" onclick="startCamera()">📷 カメラを起動する</button>
+        
+        <!-- 【追加】初回登録画面に表示する規約同意のアナウンスとリンク（ここを書き換えてください） -->
+        <div id="policy-box" class="policy-links" style="display:none;">
+            本アプリは外部サーバーに会員情報を送信しない安全な仕組みを採用しています。ご登録の際は、当店の<a href="https://www.kingfamily.co.jp/shop/news/matsudorokudaidai/linetermsofservice.html" target="_blank">利用規約</a>および<a href="https://www.kingfamily.co.jp/shop/news/matsudorokudaidai/cardlinepolicy.html" target="_blank">プライバシーポリシー</a>に同意の上、会員証をご登録ください。
+        </div>
+
         <div id="manual-box" class="manual-area" style="display:none;">
             <p>※カメラでうまくスキャンできない場合</p>
             <input type="tel" id="jan-input" class="input-box" maxlength="13" placeholder="13桁の番号を入力">
@@ -78,10 +88,12 @@ window.onload = async function() {
         }).then(function() {
             document.getElementById('status').innerHTML = '「カメラを起動」を押し、カードのバーコードを枠内に映してください。';
             document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('policy-box').style.display = 'block'; // 規約リンクを表示
             document.getElementById('manual-box').style.display = 'block';
         }).catch(function(err) {
             document.getElementById('status').innerHTML = '「カメラを起動」を押し、カードのバーコードを枠内に映してください。';
             document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('policy-box').style.display = 'block'; // 規約リンクを表示
             document.getElementById('manual-box').style.display = 'block';
         });
     }
@@ -122,7 +134,7 @@ function startCamera() {
 
             if (detectionHistory.length >= 5) {
                 var lastFive = detectionHistory.slice(-5);
-                var isAllMatch = lastFive.every(function(val) { return val === lastFive[0]; });
+                var isAllMatch = lastFive.every(function(val) { return val === lastFive; });
 
                 if (isAllMatch) {
                     Quagga.stop();
@@ -166,10 +178,6 @@ function showBarcode(code) {
                 textMargin: 12,
                 background: "#ffffff",
                 lineColor: "#000000",
-                
-                // ★【飛び出し改善設定】
-                // 両端・中央のガードバーが下に突き出るのを禁止し、
-                // すべての縦線の長さを「均一の真っ直ぐな長方形」に強制固定します。
                 flat: true 
             });
         } catch(e) {
