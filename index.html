@@ -6,22 +6,25 @@
     <title>デジタル会員証</title>
     <style>
         body { font-family: sans-serif; text-align: center; margin: 0; padding: 20px; background: #f5f5f5; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
-        h1 { font-size: 18px; color: #333; margin-bottom: 20px; }
+        .card { background: white; padding: 25px 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+        h1 { font-size: 18px; color: #333; margin-bottom: 20px; font-weight: bold; }
         button { background: #06C755; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
         button.reset { background: #999; font-size: 12px; padding: 6px 12px; width: auto; }
-        #barcode-area { font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 4px; padding: 20px; background: #eee; margin: 15px 0; border-radius: 6px; }
         #status { margin: 15px 0; font-weight: bold; color: #666; font-size: 13px; line-height: 1.5; }
+        
+        /* 手入力エリア */
         .manual-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
         .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
         .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
         .sub-btn { background: #333; font-size: 14px; padding: 8px 16px; width: auto; margin-top: 8px; }
-        #barcode { width: 100%; max-width: 320px; margin: 10px auto; display: block; }
         
-        /* 超高性能カメラの映像表示エリア */
-        #interactive { width: 100%; max-width: 360px; height: 240px; margin: 10px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; display: none; }
+        /* 高性能カメラの映像エリア */
+        #interactive { width: 100%; max-width: 360px; height: 200px; margin: 10px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; display: none; border: 3px solid #06C755; }
         #interactive video { width: 100%; height: 100%; object-fit: cover; }
-        canvas.drawingBuffer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        /* 【デザイン改善】レジで一瞬で読める完璧な美しい長方形のバーコード表示エリア */
+        .barcode-container { background: #ffffff; padding: 20px 10px; border-radius: 8px; border: 1px solid #ddd; margin: 15px 0; display: inline-block; width: 100%; box-sizing: border-radius; }
+        #barcode { width: 100%; max-width: 340px; height: auto; display: block; margin: 0 auto; }
     </style>
 </head>
 <body>
@@ -31,7 +34,6 @@
     <div id="setup-area">
         <p id="status">LINEの仕組みを読み込み中...</p>
         
-        <!-- 新しい高性能カメラの映像がここに映ります -->
         <div id="interactive" class="viewport"></div>
         
         <button id="start-btn" style="display:none;" onclick="startCamera()">📷 カメラを起動する</button>
@@ -42,17 +44,17 @@
         </div>
     </div>
     <div id="display-area" style="display:none;">
-        <svg id="barcode"></svg>
-        <div id="barcode-area" style="display:none;"></div>
+        <!-- 外枠を綺麗に整えたバーコード台座 -->
+        <div class="barcode-container">
+            <svg id="barcode"></svg>
+        </div>
         <p style="margin-top:20px;"><button class="reset" onclick="resetData()">カードの再登録（変更）</button></p>
     </div>
 </div>
 
 <script>
-// GitHubのエラー・フリーズを100%回避する安全なプログラム合流命令
 var urlLINE = "ht" + "tps:/" + "/sta" + "tic.li" + "ne-sc" + "dn.n" + "et/li" + "ff/ed" + "ge/2/s" + "dk.j" + "s";
 var urlBARCODE = "ht" + "tps:/" + "/cd" + "n.jsde" + "livr.n" + "et/np" + "m/jsb" + "arco" + "de@3.1" + "1.5/di" + "st/JsB" + "arco" + "de.al" + "l.mi" + "n.js";
-// 【新採用】世界標準の爆速バーコード読取プログラム「Quagga2」
 var urlQUAGGA = "ht" + "tps:/" + "/cd" + "njs.cl" + "oudf" + "lare.c" + "om/aj" + "ax/li" + "bs/qu" + "agga" + "/0.1" + "2.1/qu" + "agga.m" + "in.js";
 
 function loadScript(src) {
@@ -67,7 +69,6 @@ function loadScript(src) {
 var STORAGE_KEY = 'user_jan_code';
 
 window.onload = async function() {
-    // 3つの外部パーツを順番に100%確実に先読み完了させる
     await loadScript(urlLINE);
     await loadScript(urlBARCODE);
     await loadScript(urlQUAGGA);
@@ -78,7 +79,6 @@ window.onload = async function() {
         return;
     }
 
-    // LINEシステムの初期化
     if (typeof liff !== 'undefined') {
         liff.init({
             liffId: "2011004612-uxmN3BJ4"
@@ -94,41 +94,57 @@ window.onload = async function() {
     }
 };
 
-// ★新方式：LINEに頼らず、超高性能スキャナーを独自起動する
+// 【誤認識対策】同じ数字が複数回連続で一致したときだけ登録する変数（多重チェック機構）
+var detectionHistory = [];
+
 function startCamera() {
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('interactive').style.display = 'block';
     document.getElementById('status').innerText = 'バーコードを読み取り中... 緑の枠内にしっかり映してください。';
+    detectionHistory = []; // 履歴リセット
 
     Quagga.init({
         inputStream: {
             name: "Live",
             type: "LiveStream",
-            target: document.querySelector('#interactive'), // 映像を映す場所
+            target: document.querySelector('#interactive'),
             constraints: {
-                facingMode: "environment" // 必ず背面のメインカメラを使う
+                facingMode: "environment",
+                // 画質を少し落としてピント（輪郭）をクッキリ捉えやすく調整
+                width: { min: 640 },
+                height: { min: 480 },
+                aspectRatio: { min: 1, max: 2 }
             },
         },
         decoder: {
-            readers: ["ean_reader"] // JANコード(13桁)の読み取りに完全特化
+            readers: ["ean_reader"] // 13桁のJAN（EAN）コードに絞る
         }
     }, function(err) {
-        if (err) {
-            alert("カメラ起動エラー: " + err);
-            return;
-        }
-        Quagga.start(); // スキャン開始
+        if (err) { alert("カメラ起動エラー: " + err); return; }
+        Quagga.start();
     });
 
-    // バーコードを検知した瞬間の処理
+    // バーコードを検知した瞬間の判定処理
     Quagga.onDetected(function(result) {
         var code = result.codeResult.code;
-        // 13桁の正しいJANコードかチェック
+        
+        // 13桁のきれいな数字が検出された場合のみ判定
         if (code && code.length === 13 && /^\d+$/.test(code)) {
-            Quagga.stop(); // カメラ停止
-            document.getElementById('interactive').style.display = 'none';
-            localStorage.setItem(STORAGE_KEY, code);
-            showBarcode(code);
+            detectionHistory.push(code);
+
+            // 【誤認識の徹底排除】カメラの早すぎる一瞬の誤読を防ぐため、
+            // 「直近で全く同じ13桁の数字が連続して5回一致したとき」のみ本物と認めて確定させます。
+            if (detectionHistory.length >= 5) {
+                var lastFive = detectionHistory.slice(-5);
+                var isAllMatch = lastFive.every(function(val) { return val === lastFive[0]; });
+
+                if (isAllMatch) {
+                    Quagga.stop();
+                    document.getElementById('interactive').style.display = 'none';
+                    localStorage.setItem(STORAGE_KEY, code);
+                    showBarcode(code);
+                }
+            }
         }
     });
 }
@@ -144,6 +160,7 @@ function saveManualCode() {
     }
 }
 
+// 【デザイン徹底改善】レジで一瞬でスキャンできる完璧な長方形を生成
 function showBarcode(code) {
     document.getElementById('title').innerText = 'あなたの会員証';
     document.getElementById('setup-area').style.display = 'none';
@@ -152,13 +169,19 @@ function showBarcode(code) {
     if (typeof JsBarcode !== 'undefined') {
         try {
             var barcodeFormat = (code.length === 13) ? "EAN13" : "CODE128";
+            
+            // ガタガタをなくし、白黒の線の太さと長さをプロ仕様にする設定
             JsBarcode("#barcode", code, {
                 format: barcodeFormat,
-                width: 2.3,
-                height: 100,
-                displayValue: true,
-                fontSize: 18,
-                background: "#ffffff"
+                width: 2.2,       // 線の太さ（スマホ画面で滲まない最適な太さ）
+                height: 120,      // レジの赤い光の線がどこに当たっても読めるよう縦長にする（長方形化）
+                displayValue: true, // バーコードの下に数字も一緒に印字する
+                fontSize: 20,     // 数字の大きさ
+                fontOptions: "bold", // 数字を太字にしてレジスタッフが見やすく
+                font: "monospace", // 等幅フォントでバーコードと数字のガタガタを防止
+                textMargin: 12,    // バーコードと数字の間に程よい余白
+                background: "#ffffff",
+                lineColor: "#000000" // 混じり気のない真っ黒な線
             });
         } catch(e) {
             document.getElementById('barcode-area').style.display = 'block';
@@ -172,7 +195,6 @@ function showBarcode(code) {
 
 function resetData() {
     if(confirm('登録している会員証データを削除して再登録しますか？')) {
-        // カメラが動いていた場合は確実に止める
         if(typeof Quagga !== 'undefined') { try { Quagga.stop(); } catch(e){} }
         localStorage.removeItem(STORAGE_KEY);
         location.reload();
