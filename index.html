@@ -11,19 +11,15 @@
         button { background: #06C755; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
         button.reset { background: #999; font-size: 12px; padding: 6px 12px; width: auto; }
         #status { margin: 15px 0; font-weight: bold; color: #666; font-size: 13px; line-height: 1.5; }
-        
-        /* 手入力エリア */
         .manual-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
         .manual-area p { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: bold; }
         .input-box { width: 80%; padding: 10px; font-size: 18px; text-align: center; border: 2px solid #ccc; border-radius: 6px; letter-spacing: 2px; font-weight: bold; }
         .sub-btn { background: #333; font-size: 14px; padding: 8px 16px; width: auto; margin-top: 8px; }
-        
-        /* 高性能カメラの映像エリア */
         #interactive { width: 100%; max-width: 360px; height: 200px; margin: 10px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; display: none; border: 3px solid #06C755; }
         #interactive video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* 【デザイン改善】レジで一瞬で読める完璧な美しい長方形のバーコード表示エリア */
-        .barcode-container { background: #ffffff; padding: 20px 10px; border-radius: 8px; border: 1px solid #ddd; margin: 15px 0; display: inline-block; width: 100%; box-sizing: border-radius; }
+        /* バーコード台座 */
+        .barcode-container { background: #ffffff; padding: 25px 15px; border-radius: 8px; border: 1px solid #ddd; margin: 15px 0; display: inline-block; width: 100%; box-sizing: border-box; }
         #barcode { width: 100%; max-width: 340px; height: auto; display: block; margin: 0 auto; }
     </style>
 </head>
@@ -33,9 +29,7 @@
     <h1 id="title">会員証を登録する</h1>
     <div id="setup-area">
         <p id="status">LINEの仕組みを読み込み中...</p>
-        
         <div id="interactive" class="viewport"></div>
-        
         <button id="start-btn" style="display:none;" onclick="startCamera()">📷 カメラを起動する</button>
         <div id="manual-box" class="manual-area" style="display:none;">
             <p>※カメラでうまくスキャンできない場合</p>
@@ -44,7 +38,6 @@
         </div>
     </div>
     <div id="display-area" style="display:none;">
-        <!-- 外枠を綺麗に整えたバーコード台座 -->
         <div class="barcode-container">
             <svg id="barcode"></svg>
         </div>
@@ -94,14 +87,13 @@ window.onload = async function() {
     }
 };
 
-// 【誤認識対策】同じ数字が複数回連続で一致したときだけ登録する変数（多重チェック機構）
 var detectionHistory = [];
 
 function startCamera() {
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('interactive').style.display = 'block';
     document.getElementById('status').innerText = 'バーコードを読み取り中... 緑の枠内にしっかり映してください。';
-    detectionHistory = []; // 履歴リセット
+    detectionHistory = [];
 
     Quagga.init({
         inputStream: {
@@ -110,30 +102,24 @@ function startCamera() {
             target: document.querySelector('#interactive'),
             constraints: {
                 facingMode: "environment",
-                // 画質を少し落としてピント（輪郭）をクッキリ捉えやすく調整
                 width: { min: 640 },
                 height: { min: 480 },
                 aspectRatio: { min: 1, max: 2 }
             },
         },
         decoder: {
-            readers: ["ean_reader"] // 13桁のJAN（EAN）コードに絞る
+            readers: ["ean_reader"]
         }
     }, function(err) {
         if (err) { alert("カメラ起動エラー: " + err); return; }
         Quagga.start();
     });
 
-    // バーコードを検知した瞬間の判定処理
     Quagga.onDetected(function(result) {
         var code = result.codeResult.code;
-        
-        // 13桁のきれいな数字が検出された場合のみ判定
         if (code && code.length === 13 && /^\d+$/.test(code)) {
             detectionHistory.push(code);
 
-            // 【誤認識の徹底排除】カメラの早すぎる一瞬の誤読を防ぐため、
-            // 「直近で全く同じ13桁の数字が連続して5回一致したとき」のみ本物と認めて確定させます。
             if (detectionHistory.length >= 5) {
                 var lastFive = detectionHistory.slice(-5);
                 var isAllMatch = lastFive.every(function(val) { return val === lastFive[0]; });
@@ -160,7 +146,6 @@ function saveManualCode() {
     }
 }
 
-// 【デザイン徹底改善】レジで一瞬でスキャンできる完璧な長方形を生成
 function showBarcode(code) {
     document.getElementById('title').innerText = 'あなたの会員証';
     document.getElementById('setup-area').style.display = 'none';
@@ -170,18 +155,22 @@ function showBarcode(code) {
         try {
             var barcodeFormat = (code.length === 13) ? "EAN13" : "CODE128";
             
-            // ガタガタをなくし、白黒の線の太さと長さをプロ仕様にする設定
             JsBarcode("#barcode", code, {
                 format: barcodeFormat,
-                width: 2.2,       // 線の太さ（スマホ画面で滲まない最適な太さ）
-                height: 120,      // レジの赤い光の線がどこに当たっても読めるよう縦長にする（長方形化）
-                displayValue: true, // バーコードの下に数字も一緒に印字する
-                fontSize: 20,     // 数字の大きさ
-                fontOptions: "bold", // 数字を太字にしてレジスタッフが見やすく
-                font: "monospace", // 等幅フォントでバーコードと数字のガタガタを防止
-                textMargin: 12,    // バーコードと数字の間に程よい余白
+                width: 2.2,
+                height: 100,
+                displayValue: true,
+                fontSize: 20,
+                fontOptions: "bold",
+                font: "monospace",
+                textMargin: 12,
                 background: "#ffffff",
-                lineColor: "#000000" // 混じり気のない真っ黒な線
+                lineColor: "#000000",
+                
+                // ★【飛び出し改善設定】
+                // 両端・中央のガードバーが下に突き出るのを禁止し、
+                // すべての縦線の長さを「均一の真っ直ぐな長方形」に強制固定します。
+                flat: true 
             });
         } catch(e) {
             document.getElementById('barcode-area').style.display = 'block';
